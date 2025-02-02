@@ -1,7 +1,7 @@
-API_ID       = 29942004
-API_HASH     = "ad92f01e4a90cddebbea0ad16fa23026"
-BOT_TOKEN    = "6765313019:AAHYLXnKN_q5dhznb-4IuLddejkCFleIUg8"
-SESSION      = "BQHI4PQATCT_1-v6gQyDaTV88cyxlI_N7kHoG982WVRdthBAq6QDIC_NBzpcBwEFOUYdXOp7zXcS-t-dTRKTlmA4paYL3fZVYJCL7mURxZTtJ0ZINvHVi0Qf3Xuu9NfTEbzW7ZulRo-f1ADLDS6z3Kz9ogLYHtYJbM1P3C01r4ItMJ8tx7yOCZee6qcZ5UlEHT8Fxg0DvBUviMEb04RZn7QSHze_cmbcg8u49hjUxYmq8RjyuR95dhGablQ_-m0BnOxk4LZf1J-duH0LlZDwX_D_L3Kq6p67U6MKp4nLX2FWRhY2_VfjK-TS6wR7yrvjnTGzt1AomCoVJ_T75-BYQ_glBokkFAAAAABkI-HqAA"
+API_ID       = 24
+API_HASH     = "ad9a23026"
+BOT_TOKEN    = "6FleIUg8"
+SESSION      = "BQf1J-duH0LlZDwX_D_L3Kq6p67U6MKp4nLX2FWRhY2_VfjK-TS6wR7yrvjnTGzt1AomCoVJ_T75-BYQ_glBokkFAAAAABkI-HqAA"
 LOG_CHANNEL  = -1002497269320
 ADMIN        = 6605647659
-DATABASE_URI = "mongodb+srv://strong:strong@cluster0.ix7usa3.mongodb.net/?retryWrites=true&w=majority"
+DATABASE_URI = "monga3.mongodb.net/?retryWrites=true&w=majority"
