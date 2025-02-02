@@ -10,6 +10,7 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import ChannelPrivate, PeerIdInvalid, ChannelInvalid
 
 AUTO_DELETE_DURATION = 60  # Auto-delete duration
+RESULTS_PER_PAGE = 5  # Maximum results per page
 
 # Encoding & Decoding Functions
 def encode_file_id(file_id):
@@ -24,13 +25,18 @@ def sanitize_text(text):
         return "@ROCKERSBACKUP"
     text = re.sub(r"@\w+", "@ROCKERSBACKUP", text)  # Replace @username
     text = re.sub(r"https?://\S+", "@ROCKERSBACKUP", text)  # Replace links
-    return text
+    text = re.sub(r"www\.", "", text)  # Remove 'www.'
+    text = re.sub(r"cinevood", "", text, flags=re.IGNORECASE)  # Remove 'cinevood'
+    return text.strip()
 
 # Function to clean query (remove unwanted prefixes but keep main title)
 def clean_query(query):
     words = query.split()
     clean_words = [word for word in words if not word.startswith(("@", "http", "www", "-"))]
     return " ".join(clean_words) if clean_words else query  # If empty, return original query
+
+# Pagination Storage
+search_results = {}
 
 @Client.on_message(filters.text & filters.group & filters.incoming & ~filters.command(["verify", "connect", "id"]))
 async def search(bot, message):
@@ -43,52 +49,41 @@ async def search(bot, message):
         return
 
     raw_query = message.text.strip()
-    query = clean_query(raw_query)  # Clean query before searching
+    query = clean_query(raw_query)
+    requested_by = message.from_user.mention  # Get user who requested
 
     searching_msg = await message.reply_text(f"🔍 **Searching:** `{query}`", disable_web_page_preview=True)
 
-    results = ""
-    sent_files = 0
-
+    results = []
     try:
         for channel in channels:
             try:
                 async for msg in User.search_messages(chat_id=channel, query=query):
                     await searching_msg.delete()
 
-                    # Identify file type & get filename
-                    file_name = None
+                    file_name, file_size = None, None
                     if msg.document:
                         file_name = msg.document.file_name
+                        file_size = msg.document.file_size
                     elif msg.video:
                         file_name = msg.video.file_name
+                        file_size = msg.video.file_size
                     elif msg.audio:
                         file_name = msg.audio.file_name
+                        file_size = msg.audio.file_size
 
-                    # Ensure a valid filename exists
                     if not file_name:
                         continue  
 
-                    # Encode file ID for a unique download link
+                    file_name = sanitize_text(file_name.split(".")[0])  # Clean title
                     file_id = str(msg.id)
                     encoded_id = encode_file_id(file_id)
-
-                    # Generate a shareable link
                     file_link = f"https://t.me/{channel}?start={encoded_id}"
-                    title = file_name.split(".")[0]  # Extract title without extension
 
-                    # Prepare caption with sanitized text
-                    caption = f"📂 **{sanitize_text(title)}**\n🔗 [Download Here]({file_link})"
+                    # Convert file size to MB
+                    size_mb = f"{file_size / (1024 * 1024):.2f} MB" if file_size else "Unknown Size"
 
-                    # Forward file without sender tags
-                    await msg.copy(
-                        chat_id=message.chat.id,
-                        caption=caption
-                    )
-
-                    # Append results message
-                    results += f"📂 **{sanitize_text(title)}**\n🔗 [Download Here]({file_link})\n\n"
-                    sent_files += 1
+                    results.append(f"📂 **{file_name}**\n📏 **Size:** {size_mb}\n🔗 [Download Here]({file_link})\n")
 
             except (ChannelPrivate, PeerIdInvalid, ChannelInvalid):
                 print(f"Skipping invalid channel: {channel}")
@@ -97,17 +92,60 @@ async def search(bot, message):
                 print(f"Error accessing channel {channel}: {e}")
                 continue
 
-        # If no files were found
-        if sent_files == 0:
+        if not results:
             await searching_msg.delete()
             await message.reply_text(
                 "😔 **No results found! Try a different search keyword.**",
                 disable_web_page_preview=True
             )
         else:
-            await message.reply_text(results, disable_web_page_preview=True)
+            search_results[message.chat.id] = {"query": query, "results": results, "requested_by": requested_by}
+            await send_results_page(bot, message, page=1)
 
     except Exception as e:
         await searching_msg.delete()
         print(f"Error: {e}")
         await message.reply_text(f"🚨 **Error:** `{e}`", disable_web_page_preview=True)
+
+async def send_results_page(bot, message, page=1):
+    chat_id = message.chat.id
+    data = search_results.get(chat_id)
+
+    if not data:
+        return await message.reply_text("❌ **No search data found! Try searching again.**")
+
+    results = data["results"]
+    query = data["query"]
+    requested_by = data["requested_by"]
+    total_pages = (len(results) // RESULTS_PER_PAGE) + (1 if len(results) % RESULTS_PER_PAGE != 0 else 0)
+
+    if page < 1 or page > total_pages:
+        return
+
+    start_index = (page - 1) * RESULTS_PER_PAGE
+    end_index = start_index + RESULTS_PER_PAGE
+    paginated_results = results[start_index:end_index]
+
+    # Blockquote format for requested info
+    header_text = f"🔍 **Requested Movie:**\n> `{query}`\n\n👤 **Requested By:**\n> {requested_by}\n\n"
+
+    # Generate buttons
+    buttons = []
+    if page > 1:
+        buttons.append(InlineKeyboardButton("⬅️ Previous", callback_data=f"prev_{page - 1}"))
+    buttons.append(InlineKeyboardButton(f"📄 {page}/{total_pages}", callback_data="pages"))
+    if page < total_pages:
+        buttons.append(InlineKeyboardButton("Next ➡️", callback_data=f"next_{page + 1}"))
+
+    await message.reply_text(
+        header_text + "\n".join(paginated_results),
+        reply_markup=InlineKeyboardMarkup([buttons]),
+        disable_web_page_preview=True
+    )
+
+@Client.on_callback_query(filters.regex(r"^(prev|next)_(\d+)$"))
+async def navigate_pages(bot, query):
+    action, page = query.data.split("_")
+    page = int(page)
+    await send_results_page(bot, query.message, page)
+    await query.answer()
